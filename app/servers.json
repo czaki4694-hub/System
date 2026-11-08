@@ -1,0 +1,5 @@
+[
+  {"name": "Casablanca", "flag": "🇲🇦", "host": "1.1.1.1"},
+  {"name": "Paris", "flag": "🇫🇷", "host": "2.2.2.2"},
+  {"name": "Frankfurt", "flag": "🇩🇪", "host": "3.3.3.3"}
+]
