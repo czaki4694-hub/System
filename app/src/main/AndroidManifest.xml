@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <application
-        android:label="AmpMeter"
+        android:label="4G Only"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault.DayNight">
