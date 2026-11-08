@@ -18,6 +18,7 @@ import android.os.BatteryManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -240,7 +241,40 @@ class MainActivity : Activity() {
             }
             setOnClickListener { maxMa = 0.0; sumMa = 0.0; n = 0 }
         }, lp().apply { topMargin = dp(20) })
-    }
+                val ver = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (e: Exception) {
+            "1.0"
+        }
+        val about = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(16), dp(18), dp(16), dp(18))
+            background = round(CARD, 18)
+        }
+        about.addView(TextView(this).apply {
+            text = "تطوير: نورالدين المراكشي"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        })
+        about.addView(TextView(this).apply {
+            text = "الإصدار $ver"
+            textSize = 13f
+            setTextColor(MUTED)
+            setPadding(0, dp(4), 0, dp(8))
+        })
+        about.addView(TextView(this).apply {
+            text = "صفحتي على فيسبوك"
+            textSize = 14f
+            setTextColor(AMBER)
+            paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG
+            setOnClickListener {
+                startActivity(Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://www.facebook.com/profile.php?id=100069144503754")))
+            }
+        })
+        root.addView(about, lp().apply { topMargin = dp(20) })
 
     override fun onResume() { super.onResume(); h.post(tick) }
     override fun onPause() { super.onPause(); h.removeCallbacks(tick) }
