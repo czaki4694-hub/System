@@ -275,6 +275,7 @@ class MainActivity : Activity() {
             }
         })
         root.addView(about, lp().apply { topMargin = dp(20) })
+    }
 
     override fun onResume() { super.onResume(); h.post(tick) }
     override fun onPause() { super.onPause(); h.removeCallbacks(tick) }
