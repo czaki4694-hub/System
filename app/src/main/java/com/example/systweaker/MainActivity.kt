@@ -1,109 +1,87 @@
 package com.example.systweaker
 
 import android.app.Activity
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.os.Bundle
-import android.widget.*
-import com.topjohnwu.superuser.Shell
+import android.os.Handler
+import android.os.Looper
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+import kotlin.math.abs
 
 class MainActivity : Activity() {
+    private lateinit var bm: BatteryManager
+    private lateinit var tv: TextView
+    private val h = Handler(Looper.getMainLooper())
+    private var maxMa = 0.0
+    private var sumMa = 0.0
+    private var n = 0
 
-    private val statusIcons = listOf(
-        "bluetooth", "wifi", "mobile", "volume", "alarm_clock",
-        "rotate", "hotspot", "cast", "nfc", "airplane", "location"
-    )
-
-    private fun sh(cmd: String): String {
-        val r = Shell.cmd(cmd).exec()
-        return (r.out + r.err).joinToString("\n")
+    private val tick = object : Runnable {
+        override fun run() {
+            update()
+            h.postDelayed(this, 1000)
+        }
     }
-
-    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = LinearLayout(this).apply {
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        bm = getSystemService(BATTERY_SERVICE) as BatteryManager
+        tv = TextView(this).apply {
+            textSize = 22f
+            setPadding(48, 120, 48, 48)
+        }
+        val reset = Button(this).apply {
+            text = "إعادة ضبط الإحصاءات"
+            setOnClickListener { maxMa = 0.0; sumMa = 0.0; n = 0 }
+        }
+        setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(40, 80, 40, 40)
+            addView(tv)
+            addView(reset)
+        })
+    }
+
+    override fun onResume() { super.onResume(); h.post(tick) }
+    override fun onPause() { super.onPause(); h.removeCallbacks(tick) }
+
+    private fun update() {
+        val i: Intent? = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val mv = i?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0) ?: 0
+        val temp = (i?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0) ?: 0) / 10.0
+        val level = i?.getIntExtra(BatteryManager.EXTRA_LEVEL, 0) ?: 0
+        val plug = i?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+        val status = i?.getIntExtra(BatteryManager.EXTRA_STATUS, 0) ?: 0
+
+        val raw = bm.getLongProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+        val ma = abs(if (abs(raw) > 20000) raw / 1000.0 else raw.toDouble())
+        val watts = (mv / 1000.0) * (ma / 1000.0)
+
+        if (plug != 0) {
+            if (ma > maxMa) maxMa = ma
+            sumMa += ma
+            n++
         }
-        setContentView(ScrollView(this).apply { addView(root) })
-
-        fun title(t: String) = root.addView(TextView(this).apply {
-            text = t; textSize = 18f; setPadding(0, 40, 0, 10)
-        })
-
-        Shell.getShell()
-        val hasRoot = Shell.isAppGrantedRoot() == true
-        root.addView(TextView(this).apply {
-            text = if (hasRoot) "Root: OK" else "Root: غير ممنوح"
-        })
-
-        title("إخفاء أيقونات شريط الحالة")
-        val boxes = statusIcons.map { icon ->
-            CheckBox(this).apply { text = icon; root.addView(this) }
+        val avg = if (n > 0) sumMa / n else 0.0
+        val plugName = when (plug) {
+            BatteryManager.BATTERY_PLUGGED_AC -> "شاحن (AC)"
+            BatteryManager.BATTERY_PLUGGED_USB -> "USB"
+            BatteryManager.BATTERY_PLUGGED_WIRELESS -> "لاسلكي"
+            else -> "غير موصول"
         }
-        val current = sh("settings get secure icon_blacklist").trim()
-            .split(",").filter { it.isNotEmpty() && it != "null" }.toSet()
-        boxes.forEachIndexed { i, b -> b.isChecked = statusIcons[i] in current }
-
-        root.addView(Button(this).apply {
-            text = "تطبيق الأيقونات"
-            setOnClickListener {
-                val list = boxes.indices.filter { boxes[it].isChecked }
-                    .joinToString(",") { statusIcons[it] }
-                if (list.isEmpty()) sh("settings delete secure icon_blacklist")
-                else sh("settings put secure icon_blacklist $list")
-                toast("تم")
-            }
-        })
-
-        title("خيارات سريعة")
-        fun switch(label: String, onCmd: String, offCmd: String) {
-            root.addView(Switch(this).apply {
-                text = label
-                setOnCheckedChangeListener { _, on -> sh(if (on) onCmd else offCmd) }
-            })
+        val st = when (status) {
+            BatteryManager.BATTERY_STATUS_CHARGING -> "يشحن"
+            BatteryManager.BATTERY_STATUS_FULL -> "ممتلئ"
+            BatteryManager.BATTERY_STATUS_DISCHARGING -> "يفرغ"
+            else -> "-"
         }
-        switch("نسبة البطارية في شريط الحالة",
-            "settings put system status_bar_show_battery_percent 1",
-            "settings put system status_bar_show_battery_percent 0")
-        switch("الثواني في الساعة",
-            "settings put secure clock_seconds 1",
-            "settings put secure clock_seconds 0")
-
-        title("Overlay: ارتفاع شريط الحالة (dp)")
-        val h = EditText(this).apply { hint = "مثال: 24"; setText("24") }
-        root.addView(h)
-        root.addView(Button(this).apply {
-            text = "تطبيق الارتفاع"
-            setOnClickListener {
-                val px = (h.text.toString().toIntOrNull() ?: 24) * resources.displayMetrics.density
-                sh("cmd overlay fabricate --target android --name sttweak " +
-                   "android:dimen/status_bar_height 0x5=${px.toInt()}px")
-                sh("cmd overlay enable --user current com.android.shell:sttweak")
-                toast("تم (قد يحتاج إعادة تشغيل SystemUI)")
-            }
-        })
-        root.addView(Button(this).apply {
-            text = "إزالة الـ Overlay"
-            setOnClickListener {
-                sh("cmd overlay disable --user current com.android.shell:sttweak")
-                toast("تمت الإزالة")
-            }
-        })
-
-        root.addView(Button(this).apply {
-            text = "إعادة تشغيل SystemUI"
-            setOnClickListener { sh("killall com.android.systemui") }
-        })
-
-        title("أمر مخصص (root)")
-        val cmd = EditText(this).apply { hint = "settings list secure" }
-        val out = TextView(this).apply { setTextIsSelectable(true) }
-        root.addView(cmd)
-        root.addView(Button(this).apply {
-            text = "تنفيذ"
-            setOnClickListener { out.text = sh(cmd.text.toString()) }
-        })
-        root.addView(out)
+        tv.text = "التيار الآن: %.0f mA (%.2f A)\nالجهد: %.2f V\nالقدرة: %.1f W\n\n".format(ma, ma / 1000, mv / 1000.0, watts) +
+            "الأعلى: %.0f mA\nالمتوسط: %.0f mA\n\n".format(maxMa, avg) +
+            "المصدر: $plugName\nالحالة: $st\nالبطارية: $level%%\nالحرارة: %.1f °C".format(temp)
     }
 }
