@@ -6,7 +6,7 @@ android {
     namespace = "com.example.systweaker"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.example.systweaker"
+        applicationId = "com.example.lte4g"
         minSdk = 29
         targetSdk = 36
         versionCode = 1
